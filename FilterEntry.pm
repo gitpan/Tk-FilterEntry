@@ -1,7 +1,7 @@
 package Tk::FilterEntry;
 
 use vars qw($VERSION);
-$VERSION = '0.01';
+$VERSION = '0.02';
 
 use strict;
 use Tk;
@@ -46,35 +46,48 @@ sub FocusIn {
 sub FocusOut {
 	my $self = shift;
 
-	my $value = $self->get();
 	my $filter = $self->cget(-filter);
 	my $trim = $self->cget(-trim);
 	my $anchors = $self->cget(-anchors);
 	$filter = '\s*' . $filter . '\s*' if ($trim);
 	$filter = '^' . $filter . '$' if ($anchors);
-	my $vcmd = $self->cget(-validatecommand);
+	my $value = $self->get();
+	my $r_vcmd = $self->cget(-validatecommand);
+	my (@vcmd, $vcmd);
+	if (defined $r_vcmd) {
+		@vcmd = @{$r_vcmd};
+		$vcmd = shift @vcmd;
+	}
 
-	if (       ( defined $vcmd and ! &{${$vcmd}[0]}($self) )
+	if (       ( defined $vcmd and ! &{$vcmd}($self, @vcmd) )
 			or ( defined $filter   and ( $value !~ /$filter/ ) ) ) {
 		my $fg = $self->cget(-fg_invalid);
 		$self->Tk::Entry::configure(-foreground => $fg);
-		my $invcmd = $self->cget(-invalidcommand);
-		&{${$invcmd}[0]}($self) if (defined $invcmd);
+		my $r_invcmd = $self->cget(-invalidcommand);
+		if (defined $r_invcmd) {
+			my @invcmd = @{$r_invcmd};
+			my $invcmd = shift @invcmd;
+			&{$invcmd}($self, @invcmd);
+		}
 	}
 }
 
 sub validate {
 	my $self = shift;
 
-	my $vcmd = $self->cget(-validatecommand);
-	return &{${$vcmd}[0]}($self) if (defined $vcmd);
+	my $r_vcmd = $self->cget(-validatecommand);
+	if (defined $r_vcmd) {
+		my @vcmd = @{$r_vcmd};
+		my $vcmd = shift @vcmd;
+		return &{$vcmd}($self, @vcmd);
+	}
 
-	my $value = $self->get();
 	my $filter = $self->cget(-filter);
 	my $trim = $self->cget(-trim);
 	my $anchors = $self->cget(-anchors);
 	$filter = '\s*' . $filter . '\s*' if ($trim);
 	$filter = '^' . $filter . '$' if ($anchors);
+	my $value = $self->get();
 	return ( $value =~ /$filter/ ) if (defined $filter);
 
 	return 1;
@@ -153,8 +166,9 @@ The default value is 1.
 This Entry callback is called if defined. The boolean value returned defines
 if the input is valid.
 
-The validateCommand and invalidCommand are called with only one argument:
-the reference of the entry (It is a major different with Tk::Entry).
+The validateCommand and invalidCommand are called with first argument:
+the reference of the entry (It is a major different with Tk::Entry)
+and following by parameters of the closure.
 
 The default value is <undef>.
 
@@ -177,23 +191,34 @@ It returns boolean.
 
 =head1 EXAMPLE
 
-	my $hour;		# with format HH:mm
-	my $e_hour = $mw->FilterEntry(
-		-filter          => '[0-2]?\d:[0-5]?\d',
-		-invalidcommand  => sub { print "invalid ",shift->get(),"\n" },
-		-textvariable    => \$hour,
-		-width           => 15,
-	);
+    my $hour;		# with format HH:mm
+    my $e_hour = $mw->FilterEntry(
+        -filter          => '[0-2]?\d:[0-5]?\d',
+        -invalidcommand  => sub { print "invalid ",shift->get(),"\n" },
+        -textvariable    => \$hour,
+        -width           => 15,
+    );
 
 or
 
-	my $hour;		# with format HH:mm
-	my $e_hour = $mw->FilterEntry(
-		-validatecommand => sub { shift->get() =~ /^\s*[0-2]?\d:[0-5]?\d\s*$/ },
-		-invalidcommand  => sub { print "invalid ",shift->get(),"\n" },
-		-textvariable    => \$hour,
-		-width           => 15,
-	);
+    my $hour;		# with format HH:mm
+    my $e_hour = $mw->FilterEntry(
+        -validatecommand => sub { shift->get() =~ /^\s*[0-2]?\d:[0-5]?\d\s*$/ },
+        -invalidcommand  => sub { print "invalid ",shift->get(),"\n" },
+        -textvariable    => \$hour,
+        -width           => 15,
+    );
+
+or
+
+    my $hour;		# with format HH:mm
+    my $e_hour = $mw->FilterEntry(
+        -validatecommand => [ sub { $_[0]->get() =~ /$_[1]/ },
+                              '^\s*[0-2]?\d:[0-5]?\d\s*$' ],
+        -invalidcommand  => sub { print "invalid ",shift->get(),"\n" },
+        -textvariable    => \$hour,
+        -width           => 15,
+    );
 
 =head1 SEE ALSO
 
